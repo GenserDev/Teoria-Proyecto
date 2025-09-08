@@ -1,4 +1,7 @@
-#  -> Proyecto 1  Teoria de la Computación <-
+<h1 align="center">
+<br>
+  Proyecto 1 Teoria de la Computación
+</h1>
 
 <p align="center">
 <br>
