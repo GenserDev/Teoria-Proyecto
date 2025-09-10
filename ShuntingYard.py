@@ -1,104 +1,154 @@
-# Reemplazamos epsilon con el símbolo @ por la facilidad de encontrar el símbolo en el teclado y la baja probabilidad de que sea parte del lenguaje
-
-def get_precedence(c: str) -> int:
-    precedence_map = {
-        '(': 1,
-        '|': 2,
-        '.': 3,
-        '?': 4,
-        '*': 4,
-        '+': 4,
-        '^': 5
+OPERADORES = {
+    '|', 
+    '·', 
+    '*', 
+    '+', 
+    '?'
     }
-    return precedence_map.get(c, 6)
+UNARIOS = {
+    '*', 
+    '+', 
+    '?'
+    }
+PREC = {
+    '|': 1, 
+    '·': 2, 
+    '*': 3, 
+    '+': 3, 
+    '?': 3
+    }
+ASOC = {
+    '|': 
+    'L', 
+    '·': 
+    'L', 
+    '*': 
+    'R', 
+    '+': 
+    'R', 
+    '?': 
+    'R'
+    }
 
-def format_regex(regex: str) -> str:
-    all_operators = {'|', '?', '+', '*', '^', ')'}
-    binary_operators = {'|', '^'}
-    result = ""
+
+def _normalize(expr: str) -> str:
+    # Reemplazamos epsilon por @ en la ejecución
+    return expr.replace('ε', '@')
+
+def _is_op(t: str) -> bool:
+    return t in OPERADORES
+
+def _is_literal(t: str) -> bool:
+    return (len(t) == 2 and t[0] == '\\') or (len(t) == 1 and t not in OPERADORES and t not in {'(', ')'})
+
+
+
+def _tokenize(expr: str):
+    expr = _normalize(expr)
+    tokens = []
     i = 0
-    while i < len(regex) - 1:
-        c1 = regex[i]
-        c2 = regex[i + 1]
-        result += c1
-
-        if c1 == '\\':
-            i += 1
-            result += c2
+    n = len(expr)
+    while i < n:
+        ch = expr[i]
+        if ch.isspace():
             i += 1
             continue
+        if ch == '\\':
+            if i + 1 >= n:
+                raise ValueError("Escape incompleto: '\\' al final.")
+            nxt = expr[i+1]
+            tokens.append('\\' + nxt)
+            i += 2
+            continue
 
-        if (c1 != '(' and c2 != ')' and
-            c2 not in all_operators and
-            c1 not in binary_operators):
-            result += '.'
+        if ch in OPERADORES or ch in {'(', ')'}:
+            tokens.append(ch)
+            i += 1
+            continue
+        if ch in {'{', '}'}:
+            tokens.append(ch)
+            i += 1
+            continue
+        tokens.append(ch)
         i += 1
+    return tokens
 
-    if regex:
-        result += regex[-1]
-    return result
+def _insert_concat(tokens):
+    if not tokens:
+        return tokens
+    res = [tokens[0]]
+    for i in range(1, len(tokens)):
+        a = res[-1]
+        b = tokens[i]
+        a_lit_or_close_or_unary = _is_literal(a) or a == ')' or a in UNARIOS
+        b_lit_or_open = _is_literal(b) or b == '('
+        if a_lit_or_close_or_unary and b_lit_or_open:
+            res.append('·')
 
-def expand_operators(regex: str) -> str:
-    result = ""
-    i = 0
-    while i < len(regex):
-        c = regex[i]
+        res.append(b)
+    return res
 
-        if c == '\\':
-            result += c
-            if i + 1 < len(regex):
-                result += regex[i + 1]
-                i += 2
-                continue
+def infix_to_postfix(expr: str):
+    tokens = _tokenize(expr)
+    tokens = _insert_concat(tokens)
 
-        elif c == '+':
-            if not result:
-                raise ValueError("No se puede usar + al inicio")
-            prev = result[-1]
-            result = result[:-1] + prev + '*' + prev
-
-        elif c == '?':
-            if not result:
-                raise ValueError("No se puede usar ? al inicio")
-            prev = result[-1]
-            result = result[:-1] + '(' + prev + '|' + '@' + ')'
-
-        else:
-            result += c
-        i += 1
-
-    return result
-
-def infix_to_postfix(regex: str) -> str:
-    postfix = ""
+    output = []
     stack = []
-    formatted = format_regex(regex)
+    bal = 0
 
-    for c in formatted:
-        if c == '(':
-            stack.append(c)
-        elif c == ')':
+    for t in tokens:
+        if _is_literal(t):
+            output.append(t)
+
+        elif t in OPERADORES:
+            while stack:
+                top = stack[-1]
+                if top in OPERADORES:
+                    if (ASOC[t] == 'L' and PREC[t] <= PREC[top]) or (ASOC[t] == 'R' and PREC[t] < PREC[top]):
+                        output.append(stack.pop())
+                        continue
+                break
+            stack.append(t)
+
+        elif t == '(':
+            stack.append(t)
+            bal += 1
+
+        elif t == ')':
+            bal -= 1
+            if bal < 0:
+                raise ValueError("Paréntesis desbalanceados: ')' extra.")
+            # volcar hasta '('
             while stack and stack[-1] != '(':
-                postfix += stack.pop()
+                output.append(stack.pop())
             if not stack:
-                raise ValueError("Paréntesis desbalanceados")
+                raise ValueError("Paréntesis desbalanceados: falta '('.")
             stack.pop()
-        elif c in {'|', '.', '?', '*', '+', '^'}:
-            while stack and get_precedence(stack[-1]) >= get_precedence(c):
-                postfix += stack.pop()
-            stack.append(c)
+
         else:
-            postfix += c
+            raise ValueError(f"Token inesperado: {t!r}")
+
+    if bal != 0:
+        raise ValueError("Paréntesis desbalanceados.")
 
     while stack:
         top = stack.pop()
         if top in {'(', ')'}:
-            raise ValueError("Paréntesis desbalanceados")
-        postfix += top
+            raise ValueError("Paréntesis desbalanceados.")
+        output.append(top)
 
-    return postfix
+    return output
 
-def convertir_expresion(expresion: str) -> str:
-    expandida = expand_operators(expresion)
-    postfix = infix_to_postfix(expandida)
-    return postfix
+def expand_operators(expr: str) -> str:
+    return _normalize(expr)
+
+def convertir_expresion(expr: str) -> str:
+    toks = infix_to_postfix(expr)
+
+    out = []
+    for t in toks:
+        if len(t) == 2 and t[0] == '\\':
+            out.append(t[1])
+        else:
+            out.append(t)
+    return ''.join(out)

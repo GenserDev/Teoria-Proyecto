@@ -1,4 +1,4 @@
-#Construcción de AFN con el algoritmo de Thompson
+# AFN.py
 from typing import Set, Dict, List, Optional
 from ShuntingYard import infix_to_postfix, expand_operators
 
@@ -50,7 +50,6 @@ def construir_afn_simbolo(simbolo: str) -> AFN:
 
 def construir_afn_concatenacion(afn1: AFN, afn2: AFN) -> AFN:
     afn = AFN()
-
     map1: Dict[int, Estado] = {}
     for e_id, _ in afn1.estados.items():
         map1[e_id] = afn.crear_estado()
@@ -80,124 +79,6 @@ def construir_afn_concatenacion(afn1: AFN, afn2: AFN) -> AFN:
     afn.alfabeto = afn1.alfabeto.union(afn2.alfabeto)
     return afn
 
-def construir_afn_union(afn1: AFN, afn2: AFN) -> AFN:
-    afn = AFN()
-    ni = afn.crear_estado()
-    nf = afn.crear_estado()
-    afn.establecer_inicial(ni)
-    afn.establecer_final(nf)
-
-    map1: Dict[int, Estado] = {}
-    for e_id, _ in afn1.estados.items():
-        map1[e_id] = afn.crear_estado()
-
-    map2: Dict[int, Estado] = {}
-    for e_id, _ in afn2.estados.items():
-        map2[e_id] = afn.crear_estado()
-
-
-    for e_id, e in afn1.estados.items():
-        for s, ds in e.transiciones.items():
-            for d in ds:
-                map1[e_id].agregar_transicion(s, map1[d.id])
-                afn.agregar_simbolo_alfabeto(s)
-    for e_id, e in afn2.estados.items():
-        for s, ds in e.transiciones.items():
-            for d in ds:
-                map2[e_id].agregar_transicion(s, map2[d.id])
-                afn.agregar_simbolo_alfabeto(s)
-
-    ni.agregar_transicion('@', map1[afn1.estado_inicial.id])
-    ni.agregar_transicion('@', map2[afn2.estado_inicial.id])
-    for f_id in afn1.estados_finales:
-        map1[f_id].agregar_transicion('@', nf)
-    for f_id in afn2.estados_finales:
-        map2[f_id].agregar_transicion('@', nf)
-
-    afn.alfabeto = afn1.alfabeto.union(afn2.alfabeto)
-    return afn
-
-def construir_afn_kleene(afn: AFN) -> AFN:
-    res = AFN()
-    ni = res.crear_estado()
-    nf = res.crear_estado()
-    res.establecer_inicial(ni)
-    res.establecer_final(nf)
-
-    mapa: Dict[int, Estado] = {}
-    for e_id, _ in afn.estados.items():
-        mapa[e_id] = res.crear_estado()
-    for e_id, e in afn.estados.items():
-        for s, ds in e.transiciones.items():
-            for d in ds:
-                mapa[e_id].agregar_transicion(s, mapa[d.id])
-                res.agregar_simbolo_alfabeto(s)
-
-    ni.agregar_transicion('@', mapa[afn.estado_inicial.id])
-    ni.agregar_transicion('@', nf)
-    for f_id in afn.estados_finales:
-        mapa[f_id].agregar_transicion('@', nf)
-        mapa[f_id].agregar_transicion('@', mapa[afn.estado_inicial.id])
-
-    res.alfabeto = afn.alfabeto.copy()
-    return res
-
-def construir_afn_positivo(afn: AFN) -> AFN:
-
-    return construir_afn_concatenacion(afn, construir_afn_kleene(afn))
-
-def construir_afn_opcional(afn: AFN) -> AFN:
-    res = AFN()
-    ni = res.crear_estado()
-    nf = res.crear_estado()
-    res.establecer_inicial(ni)
-    res.establecer_final(nf)
-
-    mapa: Dict[int, Estado] = {}
-    for e_id, _ in afn.estados.items():
-        mapa[e_id] = res.crear_estado()
-    for e_id, e in afn.estados.items():
-        for s, ds in e.transiciones.items():
-            for d in ds:
-                mapa[e_id].agregar_transicion(s, mapa[d.id])
-                res.agregar_simbolo_alfabeto(s)
-
-    ni.agregar_transicion('@', mapa[afn.estado_inicial.id])
-    ni.agregar_transicion('@', nf)
-    for f_id in afn.estados_finales:
-        mapa[f_id].agregar_transicion('@', nf)
-
-    res.alfabeto = afn.alfabeto.copy()
-    return res
-
-def construir_afn_desde_expresion(expresion: str) -> AFN:
-    expandida = expand_operators(expresion)
-    postfijo = infix_to_postfix(expandida)
-
-    pila: List[AFN] = []
-    for char in postfijo:
-        if char == '\\':
-            raise ValueError("No se puede procesar el '\\' en el postfix.")
-        if char.isalnum() or char == '@':
-            pila.append(construir_afn_simbolo(char))
-        elif char == '.':
-            b = pila.pop()
-            a = pila.pop()
-            pila.append(construir_afn_concatenacion(a, b))
-        elif char == '|':
-            b = pila.pop()
-            a = pila.pop()
-            pila.append(construir_afn_union(a, b))
-        elif char == '*':
-            a = pila.pop()
-            pila.append(construir_afn_kleene(a))
-        else:
-            raise ValueError(f"Este símbolo no puede ser procesado en postfix: {char}")
-
-    if len(pila) != 1:
-        raise ValueError("Expresión mal formada (postfix).")
-    return pila[0]
-
 def obtener_cerradura_epsilon(estado: Estado, visitados: Optional[Set[int]] = None) -> Set[Estado]:
     if visitados is None:
         visitados = set()
@@ -209,6 +90,58 @@ def obtener_cerradura_epsilon(estado: Estado, visitados: Optional[Set[int]] = No
         for d in estado.transiciones['@']:
             cerr.update(obtener_cerradura_epsilon(d, visitados))
     return cerr
+
+def construir_afn_desde_expresion(expresion: str) -> AFN:
+    expandida = expand_operators(expresion)
+
+    postfijo_tokens = infix_to_postfix(expandida)
+
+
+    OPERADORES = {'·', '|', '*', '+', '?'}
+
+    pila: List[AFN] = []
+
+    for tok in postfijo_tokens:
+
+        if len(tok) == 2 and tok[0] == '\\':
+            pila.append(construir_afn_simbolo(tok[1]))
+            continue
+
+        # Operadores
+        if tok in OPERADORES:
+            if tok in {'·', '|'}:
+                if len(pila) < 2:
+                    raise ValueError(f"Postfix inválido: faltan operandos para '{tok}'.")
+                b = pila.pop()
+                a = pila.pop()
+                pila.append(construir_afn_concatenacion(a, b) if tok == '·' else construir_afn_union(a, b))
+            elif tok == '*':
+                if len(pila) < 1:
+                    raise ValueError("Postfix inválido: falta operando para '*'.")
+                a = pila.pop()
+                pila.append(construir_afn_kleene(a))
+            elif tok == '+':
+                if len(pila) < 1:
+                    raise ValueError("Postfix inválido: falta operando para '+'.")
+                a = pila.pop()
+                pila.append(construir_afn_positivo(a))
+            elif tok == '?':
+                if len(pila) < 1:
+                    raise ValueError("Postfix inválido: falta operando para '?'.")
+                a = pila.pop()
+                pila.append(construir_afn_opcional(a))
+            continue
+
+        if len(tok) == 1:
+            pila.append(construir_afn_simbolo(tok))
+            continue
+
+        raise ValueError(f"Token inesperado en postfix: {tok!r}")
+
+    if len(pila) != 1:
+        raise ValueError("Expresión mal formada (postfix): pila no quedó con 1 elemento.")
+    return pila[0]
+
 
 def simular_afn(afn: AFN, cadena: str) -> bool:
     if afn.estado_inicial is None:
@@ -224,3 +157,67 @@ def simular_afn(afn: AFN, cadena: str) -> bool:
         if not actuales:
             return False
     return any(afn.estados[e.id].es_final for e in actuales)
+
+def construir_afn_union(afn1: AFN, afn2: AFN) -> AFN:
+    afn = AFN()
+    ni = afn.crear_estado()
+    nf = afn.crear_estado()
+    afn.establecer_inicial(ni)
+    afn.establecer_final(nf)
+
+    map1: Dict[int, Estado] = {e_id: afn.crear_estado() for e_id in afn1.estados}
+    for e_id, e in afn1.estados.items():
+        for s, ds in e.transiciones.items():
+            for d in ds:
+                map1[e_id].agregar_transicion(s, map1[d.id])
+                afn.agregar_simbolo_alfabeto(s)
+
+    map2: Dict[int, Estado] = {e_id: afn.crear_estado() for e_id in afn2.estados}
+    for e_id, e in afn2.estados.items():
+        for s, ds in e.transiciones.items():
+            for d in ds:
+                map2[e_id].agregar_transicion(s, map2[d.id])
+                afn.agregar_simbolo_alfabeto(s)
+
+
+    ni.agregar_transicion('@', map1[afn1.estado_inicial.id])
+    ni.agregar_transicion('@', map2[afn2.estado_inicial.id])
+    for f_id in afn1.estados_finales:
+        map1[f_id].agregar_transicion('@', nf)
+    for f_id in afn2.estados_finales:
+        map2[f_id].agregar_transicion('@', nf)
+
+    afn.alfabeto = afn1.alfabeto.union(afn2.alfabeto)
+    return afn
+
+def construir_afn_kleene(afn0: AFN) -> AFN:
+    afn = AFN()
+    ni = afn.crear_estado()
+    nf = afn.crear_estado()
+    afn.establecer_inicial(ni)
+    afn.establecer_final(nf)
+    mapa: Dict[int, Estado] = {e_id: afn.crear_estado() for e_id in afn0.estados}
+
+    for e_id, e in afn0.estados.items():
+        for s, ds in e.transiciones.items():
+            for d in ds:
+                mapa[e_id].agregar_transicion(s, mapa[d.id])
+                afn.agregar_simbolo_alfabeto(s)
+
+    ni.agregar_transicion('@', mapa[afn0.estado_inicial.id])
+    ni.agregar_transicion('@', nf)
+    for f_id in afn0.estados_finales:
+        mapa[f_id].agregar_transicion('@', nf)
+        mapa[f_id].agregar_transicion('@', mapa[afn0.estado_inicial.id])
+
+    afn.alfabeto = afn0.alfabeto.copy()
+    return afn
+
+
+def construir_afn_positivo(afn0: AFN) -> AFN:
+    return construir_afn_concatenacion(afn0, construir_afn_kleene(afn0))
+
+
+def construir_afn_opcional(afn0: AFN) -> AFN:
+    afn_eps = construir_afn_simbolo('@')
+    return construir_afn_union(afn0, afn_eps)

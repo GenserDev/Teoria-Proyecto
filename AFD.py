@@ -1,4 +1,4 @@
-# Construcción de AFD con el algoritmo de subconjuntos
+# AFD.py
 from typing import Set, Dict, List, Optional
 from AFN import AFN, Estado, obtener_cerradura_epsilon
 

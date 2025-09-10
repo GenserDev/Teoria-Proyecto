@@ -1,6 +1,6 @@
-# Módulo principal actualizado con minimización y visualización
+# main.py
 import sys
-from ShuntingYard import convertir_expresion
+from ShuntingYard import infix_to_postfix as convertir_expresion
 from AFN import construir_afn_desde_expresion, simular_afn
 from AFD import convertir_afn_a_afd, simular_afd
 from minimizacion import minimizar_afd, obtener_info_minimizacion
@@ -50,6 +50,7 @@ def simular_todos_automatas(afn, afd, afd_min, cadena: str):
     print(f"Simulación AFD minimizado:{'ACEPTA' if resultado_afd_min else 'RECHAZA'}")
     
     return resultado_afn, resultado_afd, resultado_afd_min
+
 
 def procesar_archivo(nombre_archivo: str, generar_graficos: bool = True):    
     if generar_graficos:
